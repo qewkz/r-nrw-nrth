@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PREYO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background-color: #050608;
+  color: #ededed;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+.preyo-grid-background {
+  background-color: #050608;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+  background-size: 38px 38px;
+  background-position: center top;
+}
+.screen-perimeter-shading {
+  background: radial-gradient(circle at 50% 25%, transparent 25%, rgba(5, 6, 8, 0.78) 85%);
+}
+.ambient-background-glow {
+  position: fixed; top: -80px; left: 50%; transform: translateX(-50%);
+  width: 1250px; height: 680px; border-radius: 50%; pointer-events: none; z-index: 0;
+  filter: blur(85px); opacity: 0.9;
+}
+@keyframes tab_fade_blur_in {
+  0% { opacity: 0; filter: blur(8px); transform: translateY(4px); }
+  100% { opacity: 1; filter: blur(0px); transform: translateY(0); }
+}
+.tab-transition-blur { animation: tab_fade_blur_in 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes backdrop_blur_in {
+  0% { opacity: 0; backdrop-filter: blur(0px); }
+  100% { opacity: 1; backdrop-filter: blur(10px); }
+}
+@keyframes modal_scale_in {
+  0% { opacity: 0; transform: scale(0.95) translateY(8px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.modal-backdrop-blur { animation: backdrop_blur_in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.modal-panel-anim { animation: modal_scale_in 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+button { font-family: inherit; border: none; background: none; cursor: pointer; }
+input { font-family: inherit; }
+code, pre, .font-mono { font-family: "JetBrains Mono", Consolas, monospace; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+const { createRoot } = ReactDOM;
+
+const monaco_base = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs';
+
+// The exact preyo table converted to JSON
+const DEFAULT_CONFIG = {
+    "Conditions": {
+        "Targeting": { "Knocked": true, "SelfKnocked": true, "Visible": false },
+        "Aimbot": { "Knocked": true, "SelfKnocked": true, "Visible": true },
+        "Silent Aim": { "Knocked": true, "SelfKnocked": true, "Visible": false },
+        "Triggerbot": { "Knocked": true, "SelfKnocked": true, "Visible": true }
+    },
+    "Hotkeys": { "Silent Target": "C", "Aim Assist": "V", "Triggerbot": "T", "ESP": "P", "Spiderman": "V" },
+    "Gun Whitelist": {
+        "Silent Target": ["[Double-Barrel SG]", "[Revolver]", "[TacticalShotgun]"],
+        "Aim Assist": ["[Double-Barrel SG]", "[Revolver]", "[TacticalShotgun]"],
+        "Triggerbot": ["[Double-Barrel SG]", "[Revolver]", "[TacticalShotgun]"]
+    },
+    "Selection": { "Silent Target": "Manual", "Aim Assist": "Manual", "Triggerbot": "Manual" },
+    "Weapon Modifications": {
+        "Delay Changer": { "Enabled": true, "Level": 5, "Custom": null },
+        "Spread": { "Enabled": true, "Multiplier": 0.0, "Mode": "Multiplier" },
+        "Recoil": { "Enabled": true, "Multiplier": 0.0 }
+    },
+    "General": {
+        "Silent Target": { "Enabled": true, "Prediction": { "Enabled": false, "XYZ": { "Enabled": false, "X": 0.08, "Y": 0.08, "Z": 0.08 } }, "Anti Curve": { "Enabled": true, "Accuracy": "25" }, "Hit Location": { "Part": "Torso" }, "Closest Point": { "Enabled": true, "Mode": "Scaled", "Scale": 3 } },
+        "Aim Assist": { "Enabled": true, "Prediction": { "Enabled": false, "X": 0, "Y": 0, "Z": 0 }, "Smoothing": { "Enabled": true, "X": 0.08, "Y": 0.08, "Jitter": { "Enabled": true, "Strength": 0.35 }, "Velocity Scale": { "Enabled": true, "Factor": 0.6 }, "Distance Scale": { "Enabled": true, "Min": 0.25, "Max": 1.0 }, "Deadzone": { "Enabled": true, "Pixels": 0.6 } }, "Easing": { "In": "Linear", "Out": "InOut" }, "Hit Part": "Head", "Closest Point": { "Enabled": true, "Mode": "Scaled", "Scale": 3 }, "Wall Gate": false },
+        "Triggerbot": { "Enabled": true, "Mode": "Toggle", "Cooldown": 0.10, "Wall Check": true, "Limit To Weapon Range": false, "Require Mouse Target": true, "Target Part": { "Part": "Head" }, "Prediction": { "Enabled": false, "XYZ": { "Enabled": true, "X": 0.08, "Y": 0.08, "Z": 0.08 } }, "Closest Point": { "Enabled": true, "Mode": "Scaled", "Scale": 3 } }
+    },
+    "Visuals": {
+        "Hitbox": { "Enabled": false, "Size": 2 },
+        "Name ESP": { "Enabled": true, "Normal Color": { "R": 242, "G": 243, "B": 243 }, "Target Color": { "R": 196, "G": 40, "B": 28 } },
+        "Target Line": { "Enabled": false, "Color": { "R": 255, "G": 85, "B": 85 }, "InFOVColor": { "R": 100, "G": 180, "B": 255 }, "Thickness": 1 },
+        "Box FOV": { "Enabled": false, "Color": { "R": 255, "G": 85, "B": 85 }, "Fill Transparency": 39, "Stroke Transparency": 4, "Thickness": 1 },
+        "Watermark": { "Enabled": true, "Name": "@rr", "Author": "preyo.club on top", "Color": { "R": 255, "G": 255, "B": 255 }, "Active Color": { "R": 255, "G": 85, "B": 85 }, "Inactive Color": { "R": 150, "G": 150, "B": 150 }, "Size": 9, "Pixel Scale": 1, "Show Target": true, "Show Health": true, "Show Trigger": true, "Show Silent": true, "Show Delay": true }
+    },
+    "Movement Modifications": { "Anti Trip": true, "No Jump Cooldown": true, "Spiderman": { "Enabled": true, "Delay": 0.1, "Power": 60 } },
+    "Player Modifications": {
+        "Anti Stomp": { "Enabled": true }, "Anti Fling": { "Enabled": true },
+        "Animation Changer": { "Enabled": false, "Settings": { "Idle": "Zombie", "Walk": "Zombie", "Run": "Zombie", "Jump": "Ninja", "Fall": "Ninja" } },
+        "Skin Changer": { "Enabled": false, "Skins": { "[Double-Barrel SG]": "Galaxy", "[Revolver]": "Luck", "[TacticalShotgun]": "Galaxy", "[Knife]": "Golden Age Tanto" } }
+    },
+    "Avatar Modifications": { "Headless": { "Enabled": true }, "Korblox": { "Enabled": false } }
+};
+
+const themes = {
+  Midnight: { bg_app: '#080a10', bg_subnav: '#0a0d16', bg_header: '#0d101c', bg_card: '#101424', bg_editor: '#080a10', border: '#1b2238', border_subtle: '#141a2c', text_primary: '#e4e7ed', text_secondary: '#6e7792', accent: '#3b82f6', monaco_keyword: '#60a5fa', monaco_string: '#93c5fd', monaco_number: '#fbbf24' },
+  Dark: { bg_app: '#07080a', bg_subnav: '#0a0b0e', bg_header: '#0d0e12', bg_card: '#111318', bg_editor: '#07080a', border: '#1a1c24', border_subtle: '#14161d', text_primary: '#e4e7ed', text_secondary: '#636877', accent: '#60a5fa', monaco_keyword: '#60a5fa', monaco_string: '#93c5fd', monaco_number: '#fbbf24' },
+  Purple: { bg_app: '#09070f', bg_subnav: '#0d0a17', bg_header: '#110d1e', bg_card: '#161126', bg_editor: '#09070f', border: '#241a3a', border_subtle: '#1c142e', text_primary: '#ede8f5', text_secondary: '#7b7192', accent: '#a855f7', monaco_keyword: '#c084fc', monaco_string: '#e9d5ff', monaco_number: '#f472b6' },
+  Ocean: { bg_app: '#050a10', bg_subnav: '#070e17', bg_header: '#0a1420', bg_card: '#0e1c2c', bg_editor: '#050a10', border: '#142940', border_subtle: '#0f1f30', text_primary: '#e0f0fa', text_secondary: '#5a7894', accent: '#06b6d4', monaco_keyword: '#38bdf8', monaco_string: '#7dd3fc', monaco_number: '#34d399' },
+  Emerald: { bg_app: '#050c08', bg_subnav: '#07120c', bg_header: '#0a1810', bg_card: '#0d2016', bg_editor: '#050c08', border: '#133222', border_subtle: '#0e261a', text_primary: '#e5f8ee', text_secondary: '#5d826d', accent: '#10b981', monaco_keyword: '#34d399', monaco_string: '#a7f3d0', monaco_number: '#facc15' },
+  Crimson: { bg_app: '#0f0508', bg_subnav: '#14070b', bg_header: '#1a0a0f', bg_card: '#220d14', bg_editor: '#0f0508', border: '#361420', border_subtle: '#2a1019', text_primary: '#fae6ec', text_secondary: '#8a5c6a', accent: '#f43f5e', monaco_keyword: '#fb7185', monaco_string: '#fecdd3', monaco_number: '#fbbf24' },
+  Forest: { bg_app: '#060a07', bg_subnav: '#090f0a', bg_header: '#0d150e', bg_card: '#121d14', bg_editor: '#060a07', border: '#1a2e1e', border_subtle: '#142317', text_primary: '#eaf4eb', text_secondary: '#617a65', accent: '#22c55e', monaco_keyword: '#4ade80', monaco_string: '#bbf7d0', monaco_number: '#facc15' },
+  Solarized: { bg_app: '#00181f', bg_subnav: '#001f28', bg_header: '#002632', bg_card: '#07323e', bg_editor: '#00181f', border: '#0d4350', border_subtle: '#093641', text_primary: '#eee8d5', text_secondary: '#657b83', accent: '#2aa198', monaco_keyword: '#268bd2', monaco_string: '#2aa198', monaco_number: '#b58900' },
+};
+
+function icon_base(props) {
+  return { xmlns: 'http://www.w3.org/2000/svg', width: 24, height: 24, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', ...props };
+}
+
+const IconRotateCcw = (props) => <svg {...icon_base(props)}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>;
+const IconCheck = (props) => <svg {...icon_base(props)}><path d="M20 6 9 17l-5-5" /></svg>;
+const IconSettings = (props) => <svg {...icon_base(props)}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>;
+const IconCopy = (props) => <svg {...icon_base(props)}><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>;
+const IconDownload = (props) => <svg {...icon_base(props)}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></svg>;
+const IconChevronDown = (props) => <svg {...icon_base(props)}><path d="m6 9 6 6 6-6" /></svg>;
+
+function load_monaco() {
+  if (window.__monaco_loading) return window.__monaco_loading;
+  window.__monaco_loading = new Promise((resolve, reject) => {
+    if (window.monaco && window.monaco.editor) { resolve(window.monaco); return; }
+    const script = document.createElement('script');
+    script.src = monaco_base + '/loader.js';
+    script.onerror = () => reject(new Error('monaco loader failed'));
+    script.onload = () => {
+      window.require.config({ paths: { vs: monaco_base } });
+      window.require(['vs/editor/editor.main'], () => resolve(window.monaco), reject);
+    };
+    document.head.appendChild(script);
+  });
+  return window.__monaco_loading;
+}
+
+function apply_theme(monaco, theme) {
+  monaco.editor.defineTheme('dynamic-prada-theme', {
+    base: 'vs-dark', inherit: true,
+    rules: [
+      { token: 'keyword', foreground: theme.monaco_keyword.replace('#', ''), fontStyle: 'bold' },
+      { token: 'string', foreground: theme.monaco_string.replace('#', '') },
+      { token: 'string.escape', foreground: 'e2e8f0' },
+      { token: 'number', foreground: theme.monaco_number.replace('#', '') },
+      { token: 'comment', foreground: '4f5565', fontStyle: 'italic' },
+      { token: 'delimiter', foreground: '818cf8' },
+      { token: 'identifier', foreground: 'e0e4ef' },
+      { token: 'type', foreground: 'c084fc' },
+    ],
+    colors: {
+      'editor.background': theme.bg_editor, 'editor.foreground': '#d1d5db',
+      'editor.lineHighlightBackground': '#0e1118', 'editorLineNumber.foreground': '#323644',
+      'editorLineNumber.activeForeground': '#93a4db', 'editorGutter.background': theme.bg_editor,
+      'editorCursor.foreground': theme.monaco_number, 'editor.selectionBackground': '#181e2e',
+      'minimap.background': theme.bg_editor, 'scrollbarSlider.background': '#151824',
+      'scrollbarSlider.hoverBackground': '#202536', 'scrollbarSlider.activeBackground': '#2d344d',
+    },
+  });
+}
+
+function MonacoEditor({ value, on_change, theme, height }) {
+  const host = useRef(null);
+  const instance = useRef(null);
+  const change_ref = useRef(on_change);
+  const theme_ref = useRef(theme);
+  change_ref.current = on_change;
+  theme_ref.current = theme;
+
+  useEffect(() => {
+    let disposed = false;
+    load_monaco().then((monaco) => {
+      if (disposed || !host.current) return;
+      apply_theme(monaco, theme_ref.current);
+      const ed = monaco.editor.create(host.current, {
+        value: value, language: 'json', theme: 'dynamic-prada-theme', fontSize: 13,
+        fontFamily: "'JetBrains Mono', Consolas, monospace", minimap: { enabled: true, side: 'right', maxColumn: 80 },
+        scrollBeyondLastLine: false, smoothScrolling: true, lineNumbers: 'on', lineNumbersMinChars: 3,
+        folding: true, cursorBlinking: 'smooth', tabSize: 4, renderLineHighlight: 'line',
+        padding: { top: 16, bottom: 16 }, automaticLayout: true, overviewRulerBorder: false,
+        hideCursorInOverviewRuler: true, scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
+      });
+      ed.onDidChangeModelContent(() => change_ref.current(ed.getValue()));
+      instance.current = ed;
+    }).catch((err) => console.error('[preyo] monaco failed', err));
+    return () => {
+      disposed = true;
+      if (instance.current) { instance.current.dispose(); instance.current = null; }
+    };
+  }, []);
+
+  useEffect(() => {
+    const ed = instance.current;
+    if (ed && value !== ed.getValue()) ed.setValue(value);
+  }, [value]);
+
+  useEffect(() => {
+    const ed = instance.current;
+    if (!ed || !window.monaco) return;
+    apply_theme(window.monaco, theme);
+    window.monaco.editor.setTheme('dynamic-prada-theme');
+  }, [theme]);
+
+  return <div ref={host} style={{ height: height || '650px', width: '100%' }} />;
+}
+
+function App() {
+  const [current_view, set_current_view] = useState('editor');
+  const [selected_theme, set_selected_theme] = useState(() => localStorage.getItem('preyo_theme_name') || 'Midnight');
+  const [theme_dropdown_open, set_theme_dropdown_open] = useState(false);
+  const [show_apply_modal, set_show_apply_modal] = useState(false);
+  const [lua_code, set_lua_code] = useState(() => {
+    const saved = localStorage.getItem('preyo_active_cfg');
+    if (saved) return saved;
+    return JSON.stringify(DEFAULT_CONFIG, null, 4);
+  });
+
+  const theme = themes[selected_theme] || themes.Midnight;
+
+  useEffect(() => {
+    localStorage.setItem('preyo_active_cfg', lua_code);
+  }, [lua_code]);
+
+  useEffect(() => {
+    localStorage.setItem('preyo_theme_name', selected_theme);
+  }, [selected_theme]);
+
+  const handle_apply_session = async () => {
+    set_show_apply_modal(false);
+    localStorage.setItem('preyo_active_cfg', lua_code);
+    try {
+      const parsed = JSON.parse(lua_code);
+      
+      // FIXED URL: Pointing directly to the Netlify function with a cache buster
+      const res = await fetch('/.netlify/functions/config?t=' + Date.now(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(parsed)
+      });
+
+      const text = await res.text();
+      console.log("Server Response:", text);
+
+      if (res.ok) {
+        alert("✅ Config successfully pushed to Netlify! Roblox will sync in 2 seconds.");
+      } else {
+        alert("❌ Rejected: " + text);
+      }
+    } catch (err) {
+      alert("❌ Invalid JSON syntax or network error.");
+    }
+  };
+
+  const handle_reset = () => {
+    if (window.confirm('Reset configuration to original default?')) {
+      set_lua_code(JSON.stringify(DEFAULT_CONFIG, null, 4));
+    }
+  };
+
+  return (
+    <div className="preyo-grid-background" style={{ minHeight: '100vh', backgroundColor: theme.bg_app, color: theme.text_primary, display: 'flex', flexDirection: 'column', position: 'relative', transition: 'background-color 0.25s ease' }}>
+      <div className="ambient-background-glow" style={{ background: `radial-gradient(ellipse at center, ${theme.accent}2b 0%, ${theme.accent}0e 45%, transparent 75%)`, transition: 'background 0.35s ease' }} />
+      <div style={{ position: 'fixed', top: 0, left: '50%', transform: 'translateX(-50%)', width: '100vw', maxWidth: '1100px', height: '280px', background: `radial-gradient(ellipse 65% 85% at 50% 0%, ${theme.accent}1f 0%, transparent 80%)`, pointerEvents: 'none', zIndex: 0, transition: 'background 0.35s ease' }} />
+      <div className="screen-perimeter-shading" style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }} />
+
+      <header style={{ position: 'relative', zIndex: 10, backgroundColor: theme.bg_header, borderBottom: `1px solid ${theme.border_subtle}`, padding: '16px 36px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'background-color 0.25s ease, border-color 0.25s ease' }}>
+        <div onClick={() => set_current_view('editor')} style={{ fontSize: 20, fontWeight: 900, letterSpacing: '2.5px', color: '#ffffff', cursor: 'pointer', userSelect: 'none', fontFamily: "'Inter', sans-serif" }}>
+          PREYO
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <button type="button" title="Appearance Settings" onClick={() => set_current_view(current_view === 'settings' ? 'editor' : 'settings')} style={{ color: current_view === 'settings' ? '#ffffff' : '#5b6172', cursor: 'pointer', display: 'flex', transition: 'color 0.15s' }}>
+            <IconSettings style={{ width: 17, height: 17 }} />
+          </button>
+        </div>
+      </header>
+
+      <div style={{ position: 'relative', zIndex: 10, backgroundColor: theme.bg_subnav, borderBottom: `1px solid ${theme.border_subtle}`, padding: '0 36px', display: 'flex', alignItems: 'center', transition: 'background-color 0.25s ease' }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <button type="button" onClick={() => set_current_view('editor')} style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '1px', color: current_view === 'editor' ? '#ffffff' : theme.text_secondary, padding: '12px 0 10px', borderBottom: current_view === 'editor' ? '2px solid #ffffff' : '2px solid transparent', cursor: 'pointer', transition: 'all 0.15s ease', fontFamily: "'Inter', sans-serif" }}>
+            DASHBOARD
+          </button>
+        </div>
+      </div>
+
+      <div style={{ position: 'relative', zIndex: 10, flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {current_view === 'settings' ? (
+          <main key="settings" className="tab-transition-blur" style={{ maxWidth: 1220, width: '100%', margin: '36px auto', padding: '0 24px', flex: 1 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#ffffff', marginBottom: 6, letterSpacing: '-0.2px' }}>Appearance</h2>
+            <p style={{ fontSize: 13, color: theme.text_secondary, marginBottom: 24 }}>Pick the theme the whole site uses on this device.</p>
+            <div style={{ backgroundColor: theme.bg_card, border: `1px solid ${theme.border}`, borderRadius: 6, padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', transition: 'background-color 0.25s ease, border-color 0.25s ease' }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#ffffff', marginBottom: 5 }}>Theme</div>
+                <div style={{ fontSize: 13, color: theme.text_secondary }}>Changes the accent and surface colours across the dashboard.</div>
+              </div>
+              <div style={{ position: 'relative', width: 220 }}>
+                <button type="button" onClick={() => set_theme_dropdown_open(!theme_dropdown_open)} style={{ width: '100%', padding: '9px 13px', backgroundColor: 'rgba(0,0,0,0.25)', border: `1px solid ${theme.border}`, borderRadius: 4, color: '#ffffff', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+                  <span>{selected_theme}</span>
+                  <IconChevronDown style={{ width: 14, height: 14, color: theme.text_secondary }} />
+                </button>
+                {theme_dropdown_open && (
+                  <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, width: '100%', backgroundColor: '#121626', border: `1px solid ${theme.border}`, borderRadius: 4, boxShadow: '0 16px 36px rgba(0,0,0,0.7)', zIndex: 50, maxHeight: 260, overflowY: 'auto' }}>
+                    {Object.keys(themes).map((theme_name) => {
+                      const is_selected = theme_name === selected_theme;
+                      return (
+                        <div key={theme_name} onClick={() => { set_selected_theme(theme_name); set_theme_dropdown_open(false); }} style={{ padding: '10px 14px', fontSize: 13, color: is_selected ? '#ffffff' : '#8c95b3', backgroundColor: is_selected ? '#22283e' : 'transparent', cursor: 'pointer' }} onMouseOver={(e) => { if (!is_selected) e.currentTarget.style.backgroundColor = '#181e33'; }} onMouseOut={(e) => { if (!is_selected) e.currentTarget.style.backgroundColor = 'transparent'; }}>
+                          {theme_name}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </main>
+        ) : (
+          <main key="editor" className="tab-transition-blur" style={{ maxWidth: 1220, width: '100%', margin: '26px auto', padding: '0 24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ backgroundColor: theme.bg_card, border: `1px solid ${theme.border}`, borderRadius: 3, padding: '16px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, boxShadow: '0 16px 36px -8px rgba(0, 0, 0, 0.85)', transition: 'background-color 0.25s ease, border-color 0.25s ease' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
+                  <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.5px', color: '#ffffff' }}>DA HOOD</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.8px', padding: '2px 8px', backgroundColor: '#151c2c', border: '1px solid #23304c', color: '#60a5fa', borderRadius: 2, fontFamily: "'JetBrains Mono', monospace" }}>JSON</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: theme.text_secondary }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: '#10b981' }} />
+                  <span style={{ textTransform: 'uppercase', letterSpacing: '0.5px' }}>Preyo</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button type="button" onClick={handle_reset} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 15px', backgroundColor: 'rgba(248, 113, 113, 0.05)', border: '1px solid rgba(248, 113, 113, 0.3)', color: '#f87171', fontSize: 11, fontWeight: 700, letterSpacing: '0.8px', borderRadius: 2, fontFamily: "'JetBrains Mono', monospace", cursor: 'pointer' }}>
+                  <IconRotateCcw style={{ width: 12, height: 12 }} /><span>RESET</span>
+                </button>
+                <button type="button" onClick={() => set_show_apply_modal(true)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 17px', backgroundColor: '#1a1e2a', border: '1px solid #2c3346', color: '#ffffff', fontSize: 11, fontWeight: 700, letterSpacing: '0.8px', borderRadius: 2, fontFamily: "'JetBrains Mono', monospace", cursor: 'pointer' }}>
+                  <IconCheck style={{ width: 12, height: 12, color: '#34d399', strokeWidth: 3 }} /><span>APPLY</span>
+                </button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 650, backgroundColor: theme.bg_editor, border: `1px solid ${theme.border}`, borderRadius: 3, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 60px -10px rgba(0, 0, 0, 0.95)', transition: 'background-color 0.25s ease, border-color 0.25s ease' }}>
+              <div style={{ flex: 1, position: 'relative' }}>
+                <MonacoEditor height="650px" value={lua_code} on_change={(val) => set_lua_code(val || '')} theme={theme} />
+              </div>
+              <div style={{ backgroundColor: theme.bg_subnav, borderTop: `1px solid ${theme.border_subtle}`, padding: '7px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: '#555966' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ color: '#888f9e' }}>JSON Config</span><span>Â·</span><span>UTF-8</span><span>Â·</span><span>4 Spaces</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <button type="button" onClick={() => navigator.clipboard?.writeText(lua_code)} style={{ color: '#7a8090', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <IconCopy style={{ width: 12, height: 12 }} /><span>Copy</span>
+                  </button>
+                  <button type="button" onClick={() => { const blob = new Blob([lua_code], { type: 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'preyo_config.json'; a.click(); URL.revokeObjectURL(url); }} style={{ color: '#7a8090', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <IconDownload style={{ width: 12, height: 12 }} /><span>Export</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </main>
+        )}
+      </div>
+
+      {show_apply_modal && (
+        <div className="modal-backdrop-blur" style={{ position: 'fixed', inset: 0, zIndex: 100, backgroundColor: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="modal-panel-anim" style={{ width: '100%', maxWidth: 420, backgroundColor: '#161821', border: '1px solid #232736', borderRadius: 4, padding: '28px 24px 22px', boxShadow: '0 30px 70px -10px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.06)', textAlign: 'center' }}>
+            <h3 style={{ fontSize: 15, fontWeight: 800, letterSpacing: '0.6px', color: '#ffffff', marginBottom: 10, textTransform: 'uppercase' }}>APPLY TO NETLIFY</h3>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.8px', color: '#767e94', lineHeight: 1.6, marginBottom: 24, textTransform: 'uppercase' }}>
+              THIS WILL UPDATE THE LIVE CONFIG.<br />ROBLOX CLIENTS WILL SYNC INSTANTLY.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <button type="button" onClick={() => set_show_apply_modal(false)} style={{ padding: '10px 0', backgroundColor: '#11131b', border: '1px solid #242838', color: '#ffffff', fontSize: 11, fontWeight: 700, letterSpacing: '1px', borderRadius: 3, cursor: 'pointer', textTransform: 'uppercase' }}>CANCEL</button>
+              <button type="button" onClick={handle_apply_session} style={{ padding: '10px 0', backgroundColor: '#93c5fd', border: 'none', color: '#0f172a', fontSize: 11, fontWeight: 800, letterSpacing: '1px', borderRadius: 3, cursor: 'pointer', textTransform: 'uppercase' }}>PUSH</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
